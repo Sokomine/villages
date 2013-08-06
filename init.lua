@@ -1,4 +1,26 @@
 
+
+--[[
+    build a road (including sideroads) in order to form a village
+    Mod for MineTest
+    Full Mod can be found here: https://github.com/Sokomine/villages
+
+    Copyright (C) 2013 Sokomine
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+--]]
+
 villages = {}
 
 villages.mts_path = minetest.get_modpath("villages").."/buildings/";
@@ -81,6 +103,7 @@ villages.building_data = {
    river_10        = {burried=1, rotated=90, farming_plus=0, avoid='', typ='road'},
    river_11        = {burried=1, rotated=90, farming_plus=0, avoid='', typ='road'},
 
+--[[
    -- Houses from Taokis Structure I/O Mod (see https://forum.minetest.net/viewtopic.php?id=5524)
    default_farm_large     = {burried=1, rotated=180, farming_plus=0, avoid='', typ='farm_full'},
    default_farm_small     = {burried=1, rotated=180, farming_plus=1, avoid='', typ='farm_tiny'},
@@ -91,6 +114,7 @@ villages.building_data = {
    default_fountain_large = {burried=0, rotated=180, farming_plus=0, avoid='well', typ='well'},
    default_fountain_small = {burried=0, rotated=180, farming_plus=0, avoid='well', typ='well'},
    default_pole           = {burried=0, rotated=180, farming_plus=0, avoid='',     typ='deko'},
+--]]
 }
 
 
@@ -883,7 +907,7 @@ distances_houses = {101,0};
                     
                 local replacements = {};
                 local houses_road = villages.houses_cottages;
-                if( math.random( 1,4 )==1 ) then
+                if( math.random( 1,4 )==1 and 0) then -- TODO: disabled for now
                    houses_road  = villages.houses_taoki;
                    replacements = villages.get_replacement_list( 'taoki' ); 
                 else
