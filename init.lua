@@ -41,7 +41,10 @@ villages.BRANCH_PROBABILITY  = 40;  -- how probable is it that we'll branch off 
 -- typ: used internally; will later be relevant for spawning of npc
 --      for now, only typ "road" is relevant
 villages.building_data = {
-   church_1        = {burried=1, rotated=0, farming_plus=0, avoid='', typ='church'},    
+   church_1        = {burried=1, rotated=0,   farming_plus=0, avoid='', typ='church'},    
+   church_2        = {burried=1, rotated=90,  farming_plus=0, avoid='', typ='church'},    
+   church_3        = {burried=1, rotated=180, farming_plus=0, avoid='', typ='church'},    
+   church_4        = {burried=1, rotated=270, farming_plus=0, avoid='', typ='church'},    
    forge_1         = {burried=1, rotated=0, farming_plus=0, avoid='', typ='forge'},
    mill_1          = {burried=1, rotated=0, farming_plus=0, avoid='', typ='mill'},
    hut_1           = {burried=1, rotated=0, farming_plus=0, avoid='', typ='hut'},
@@ -71,16 +74,16 @@ villages.building_data = {
    well_7          = {burried=1, rotated=0, farming_plus=0, avoid='well', typ='well'},
    well_8          = {burried=1, rotated=0, farming_plus=0, avoid='well', typ='well'},
 
-   tree_place_1    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
-   tree_place_2    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
-   tree_place_3    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
-   tree_place_4    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
-   tree_place_5    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
-   tree_place_6    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
-   tree_place_7    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
-   tree_place_8    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
-   tree_place_9    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
-   tree_place_10   = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_center'},
+   tree_place_1    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
+   tree_place_2    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
+   tree_place_3    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
+   tree_place_4    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
+   tree_place_5    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
+   tree_place_6    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
+   tree_place_7    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
+   tree_place_8    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
+   tree_place_9    = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
+   tree_place_10   = {burried=0, rotated=0, farming_plus=0, avoid='', typ='village_square'},
 
    dirtroad_1      = {burried=1, rotated=0, farming_plus=0, avoid='', typ='road'},
    black_road_1    = {burried=1, rotated=0, farming_plus=0, avoid='', typ='road'},
@@ -134,8 +137,8 @@ villages.init = function()
       if(   villages.building_data[ k ].rotated == 90
         or  villages.building_data[ k ].rotated == 270 ) then
 
-         villages.building_data[ k ].size.x = res.size.z;
-         villages.building_data[ k ].size.z = res.size.x;
+         villages.building_data[ k ].size.x = res.size.x;
+         villages.building_data[ k ].size.z = res.size.z;
    --     print('Rotated building. Length: '..tostring( villages.building_data[ k ].size.z )..' width: '..tostring( villages.building_data[ k ].size.x ));
       end
 
@@ -156,8 +159,6 @@ end
 villages.get_replacement_list = function( housetype )
 
    local replacements = {};
-
--- TODO: slabs sometimes do not seem to work
 
    -- Taokis houses from structure i/o
    if( housetype == 'taoki' ) then  
@@ -225,7 +226,7 @@ villages.get_replacement_list = function( housetype )
       if(  mfs == ':loam' or mfs == 'clay') then 
          mfs = 'wood';
       -- for sandstonebrick, use sandstone
-      elseif( mfs == 'sandstonebrick' ) then
+      elseif( mfs == 'sandstonebrick' or mfs == 'desert_stone' or mfs == 'desert_stonebrick') then
          mfs = 'sandstone';
       end
       table.insert( replacements, {'stairs:slab_sandstone',   'stairs:slab_'..mfs});
@@ -349,7 +350,8 @@ end
 -- max_houses: allow only that many houses in the row; stop even if max_ength would allow more
 -- inverse_street_dir: usually, the street only extends in positive x or z direction; at the end of the road,
 --    not all available space may be consumed. with inverse_street_dir set to 1, the "hole" is moved to the other end
-villages.plan_house_row = function( start_pos, orientation, housenames, interspacing_house_road, interspacing_house_house, max_length, max_width, max_houses, inverse_street_dir, allow_branch )
+-- use_given_order: in case of the central place, the array "housenames" contains the housenames alredy in the desired order
+villages.plan_house_row = function( start_pos, orientation, housenames, interspacing_house_road, interspacing_house_house, max_length, max_width, max_houses, inverse_street_dir, allow_branch, use_given_order, start_with, distance_road_start, distance_house_start, village_square, start_with_length )
 
    local current_length = 0;
    local house_row      = {};
@@ -365,6 +367,8 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
       dist_last_branch    = -100000; -- this way, we'll never accumulate enough space to branch off
    end
 
+
+
    -- if the street ought to extend in the other direction, start it at the other end
    if( inverse_street_dir == 1 ) then
    
@@ -376,31 +380,136 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
    end
 
 
+   -- at the central place, the distance between the houses from village_square.house_rows_square[ 3 ] and the road needs to be increased
+   local inc_space_road  = 0;
+   -- at which position are we in village_square.house_rows_square[3]?
+   local next_house_at_place = 0;
+
+
+
    while( current_length < max_length and #house_row < max_houses ) do
 
       local selected_house = '';
       local is_branch = 0;
       local add_rotation_if_branch = 0;
 
+
+      -- does the village square end here?
+      if(     village_square ~= nil 
+          and (next_house_at_place == #village_square.house_rows_square[3] + 1 )) then
+
+         inc_space_road = 0;
+
+         -- do this only at the main road
+         if( allow_branch ~= nil and allow_branch ~= "") then
+            -- add some free space for village_square.house_rows_square[1]
+            true_length      = true_length      + village_square.width_row[1]; --length_row[2];
+            current_length   = current_length   + village_square.width_row[1]; --length_row[2];
+            dist_last_branch = 0;
+         end
+
+         -- avoid doing the same again
+         next_house_at_place = next_house_at_place + 1;
+      end
+
+      -- the first houses the row starts with have been determined alredy; the rest is random!
+      if( start_with ~= nil and #house_row < #start_with ) then
+
+         -- Note: Method does not work if inverse_street_dir==1
+         selected_house = start_with[ #house_row+1 ];
+
+      -- we are working on the central place
+      elseif( village_square ~= nil and next_house_at_place <= #village_square.house_rows_square[ 3 ]) then
+      
+         -- shall we begin with the place now?
+         if(   next_house_at_place   < 1 ) then
+
+            -- sideroad
+            if( allow_branch == nil or allow_branch == "" ) then
+
+               next_house_at_place = 1;
+
+            elseif(   dist_last_branch  > villages.MIN_BRANCH_DIST 
+              and math.random( 1, 100 ) < villages.BRANCH_PROBABILITY ) then
+
+               next_house_at_place = 1;
+
+               -- add 
+               true_length      = true_length      + village_square.width_row[2]; --length_row[1];
+               current_length   = current_length   + village_square.width_row[2]; --length_row[1];
+               dist_last_branch = -1 * village_square.square_length; --square_width;
+
+
+               local tree_offset = math.floor( (village_square.square_length - villages.building_data[ village_square.house_rows_square[4][1] ].size.x ) / 2);
+               local tree_offset_street = math.floor( (village_square.square_width - villages.building_data[ village_square.house_rows_square[4][1] ].size.z ) / 2)-1;
+
+               -- make sure there is enough place for the road
+               if( villages.building_data[ village_square.house_rows_square[ 3 ][ 1 ] ].typ == 'road' ) then
+                  tree_offset = tree_offset + villages.building_data[ village_square.house_rows_square[ 3 ][ 1 ] ].size.x;
+               else
+                  tree_offset = tree_offset - villages.building_data[ village_square.house_rows_square[ 3 ][ #village_square.house_rows_square[3] ] ].size.x;
+               end
+               if( tree_offset < 0 ) then
+                  tree_offset = 0;
+               end
+
+               -- place the tree
+               if( orientation == 90 or orientation == 270 ) then
+
+                  house_pos.x = start_pos.x + current_length + tree_offset;
+                  house_pos.z = start_pos.z + tree_offset_street;
+               else
+                  house_pos.z = start_pos.z + current_length + tree_offset;
+                  house_pos.x = start_pos.x + tree_offset_street;
+               end
+
+               house_row[ #house_row + 1 ] = { house     = village_square.house_rows_square[4][1],
+                                               dist_next = 0,
+                                               dist_road = 0,
+                                               pos       = { x = house_pos.x, y = house_pos.y, z = house_pos.z },
+                                               size      = villages.building_data[ village_square.house_rows_square[4][1] ].size,
+                                               rot       = 0,             -- does not matter in this case
+                                               fruit     = nil,           -- no fruit (we plant a tree, not a field)
+                                               is_branch = 0,
+                                               village_square = nil };
+               -- reset house_pos
+               house_pos = { x = start_pos.x, y = start_pos.y, z = start_pos.z };
+            end
+         end
+
+         -- add a house that belongs to the plac
+         if( next_house_at_place > 0 ) then
+
+            selected_house      = village_square.house_rows_square[ 3 ][ next_house_at_place ];
+            next_house_at_place = next_house_at_place + 1;
+
+            -- how far away do we have to place the houses of village_square.house_rows_square[3] from the main road?
+            inc_space_road      = village_square.square_length; ---square_length;
+
+         -- else add a random house
+         else
+            -- TODO: avoid is not taken into account here
+            selected_house = housenames[ math.random( 1, #housenames )];
+         end
+
+      -- which house goes at which position has already been determined
+      elseif( use_given_order == 1 ) then
+         
+         -- just get the next from the row
+         selected_house = housenames[ #house_row+1 ];
+         inc_space_road   = 0;
+
       -- do we branch off here?
-      if(    dist_last_branch      > villages.MIN_BRANCH_DIST 
+      elseif(    dist_last_branch      > villages.MIN_BRANCH_DIST 
          and math.random( 1, 100 ) < villages.BRANCH_PROBABILITY ) then
 
-         selected_house    = allow_branch;
-         dist_last_branch  = 0;
-
-         -- if we have a road that branches off from the main road in the street, that one needs to get rotated seperately
-         house_length = villages.building_data[ selected_house ].size.x;
-         house_width  = villages.building_data[ selected_house ].size.z;
-
-         is_branch              =  1;
-         add_rotation_if_branch = 90;
-
+         selected_house    = allow_branch; -- select a road
+         inc_space_road   = 0;
       else
-         is_branch              =  0;
 
          -- get a random house
          selected_house = housenames[ math.random( 1, #housenames )];
+         inc_space_road   = 0;
 
          -- avoid to repeat houses/buildings where repeating would be strange (two wells in a row would be pointless)
          while( #house_row > 1 
@@ -411,13 +520,31 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
             -- get a new house
             selected_house = housenames[ math.random( 1, #housenames )];
          end
+      end
 
+
+      -- this can only be a branch if it does not consist entirely of road pieces
+      if(    villages.building_data[ selected_house ].typ == 'road'
+         and villages.building_data[ housenames[ 1 ]].typ ~= 'road') then
+
+         -- if we have a road that branches off from the main road in the street, that one needs to get rotated seperately
+         house_length = villages.building_data[ selected_house ].size.x;
+         house_width  = villages.building_data[ selected_house ].size.z;
+
+         add_rotation_if_branch = 90;
+         is_branch              = 1;
+         dist_last_branch  = 0;
+      else
          -- the length of the house relative to the street is always the same
          house_width  = villages.building_data[ selected_house ].size.x;
          -- the width of the house; this is only important so that we do not place it too far away from the road
          house_length = villages.building_data[ selected_house ].size.z;
+
+         is_branch              = 0;
+         add_rotation_if_branch = 0;
       end
 
+ 
 
       -- add the new house (provided there's space for it)
       if( current_length + house_length < max_length ) then
@@ -437,27 +564,42 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
             space_inbetween = 0;
          end
 
-         -- the house may be some nodes away from the road
-         local a2 = math.random( 1, 100 );
+
+         --how far away from the road does the house start?
          local space_road = 10000; 
-         for i,v in ipairs( interspacing_house_road ) do
-            if( a1 > v and space_road == 10000) then 
-               space_road = (i-1);
-            end
-         end
+
+
+         -- increase space at the central village place
+         if( inc_space_road ~= 0 and is_branch ~= 1) then
+            space_road = -1 + inc_space_road;
+
          -- most roads will interconnect nicely that way
-         if( is_branch==1 ) then
+         elseif( is_branch==1 ) then
             space_road = -1;
-         end
 
-         -- make sure we do not get too wide with that
-         if( house_width + space_road > max_width ) then
-            space_road = 0;
-         end
+         -- make room for a village place
+         elseif( start_with ~= nil and (#house_row < #start_with or current_length < start_with_length)) then
+            space_road = distance_road_start;
+--print( 'distance_road_start: '..tostring( distance_road_start ).." for house "..tostring( selected_house ));
 
-         -- how wide is the road at its widest point? this will be important for further roads branching off
-         if( house_width + space_road > true_width ) then
-            true_width = house_width + space_road;
+         else
+            -- the house may be some nodes away from the road
+            local a2 = math.random( 1, 100 );
+            for i,v in ipairs( interspacing_house_road ) do
+               if( a1 > v and space_road == 10000) then 
+                  space_road = (i-1);
+               end
+            end
+
+            -- make sure we do not get too wide with that
+            if( house_width + space_road > max_width ) then
+               space_road = 0;
+            end
+
+            -- how wide is the road at its widest point? this will be important for further roads branching off
+            if( house_width + space_road > true_width ) then
+               true_width = house_width + space_road;
+            end
          end
 
          -- this helps to calculate the coordinates
@@ -465,15 +607,17 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
             space_road = space_road * -1;
          end
 
-
+         local dir = 1;
+--         if( inverse_street_dir == 1 ) then
+--            dir = -1;
+--         end
          -- house_pos may need to be transformed since place_schematic walks in positive x- and z- direction
          if( orientation == 90 or orientation == 270 ) then
 
-            house_pos.x = start_pos.x + current_length;
+            house_pos.x = start_pos.x + ( dir * current_length);
             house_pos.z = start_pos.z + space_road;
          else
-
-            house_pos.z = start_pos.z + current_length;
+            house_pos.z = start_pos.z + ( dir * current_length);
             house_pos.x = start_pos.x + space_road;
          end
 
@@ -484,20 +628,20 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
          end
 
 
-      if( is_branch ~= 1 ) then
-         if(     (orientation == 180 )) then
-            house_pos.x = house_pos.x - house_width;
-         elseif( (orientation == 90  )) then
-            house_pos.z = house_pos.z - house_width;
-         end
-      else
-         if(     orientation==180 ) then
-            house_pos.z = house_pos.z + house_length;
-         elseif( orientation==0) then
-            house_pos.z = house_pos.z + house_length;
+         if( is_branch ~= 1 ) then
+            if(     (orientation == 180 )) then
+               house_pos.x = house_pos.x - house_width;
+            elseif( (orientation == 90  )) then
+               house_pos.z = house_pos.z - house_width;
+            end
+         else
+            if(     orientation==180 ) then
+               house_pos.z = house_pos.z + house_length;
+            elseif( orientation==0) then
+               house_pos.z = house_pos.z + house_length;
 
+            end
          end
-      end
 
 
 
@@ -508,6 +652,12 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
             fruit = villages.farming_plus_fruits[ math.random( 1, #villages.farming_plus_fruits )];
          end
 
+         -- pass on the copy
+         local village_square_copy = nil;
+         if( is_branch == 1 and village_square ~= nil and inc_space_road > 0) then
+            village_square_copy = village_square;
+         end
+         
          -- some buildings are already rotated
          -- size and pos are redundant; they get saved in order to prevent chaos due to later change of the content of the .mts file through the user
          house_row[ #house_row + 1 ] = { house = selected_house, dist_next = space_inbetween, dist_road = space_road,
@@ -515,7 +665,8 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
                                          size  = villages.building_data[ selected_house ].size,
                                          rot   = rotation,
                                          fruit = fruit,
-                                         is_branch = is_branch };
+                                         is_branch = is_branch,
+                                         village_square = village_square_copy };
 
          -- the row got longer
          true_length      = current_length   + house_length;
@@ -528,9 +679,18 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
       end
    end
    
+
    -- let the road extend into the other direction
    if( inverse_street_dir == 1 ) then 
 
+   
+      if( orientation == 0 or orientation == 180 ) then
+         start_pos.z = start_pos.z + max_length;
+      else
+         start_pos.x = start_pos.x + max_length;
+      end
+
+ 
       -- how much space is left empty at the end of the road?
       local leftover = max_length - true_length;
 
@@ -550,6 +710,7 @@ villages.plan_house_row = function( start_pos, orientation, housenames, interspa
       end
    end
 
+
    if( #house_row == 0 ) then
       print( ' ERROR: NO HOUSE FOR ROAD. Length: '..tostring( max_length )); -- TODO
       return { {road_length=0, road_width=0} };
@@ -566,7 +727,7 @@ end
 -- max_houses is a limit for *each* side of the house rows - not for both combined
 villages.plan_road_with_house_rows = function( start_pos_orig, orientation, housenames,
                                                interspacing_house_road, interspacing_house_house,
-                                               max_length, max_width, max_houses, roadnames, recursion_depth, buildings_offset )
+                                               max_length, max_width, max_houses, roadnames, recursion_depth, buildings_offset, village_square )
 
    -- north/south or east/west are generated the same - inverse_street_dir makes the distinction
    local inverse_street_dir = 0;
@@ -625,16 +786,62 @@ villages.plan_road_with_house_rows = function( start_pos_orig, orientation, hous
 
    local house_rows = { {}, {} };
 
+    -- determine the data for the central village square - of which we need only one
+   local village_squares = {nil,nil};
+   if( recursion_depth < 1 ) then
+--      village_squares[ math.random( 1,2 )] = villages.plan_village_square( 'cottages', allow_branch );
+
+      -- all house rows are constructed in positive direction - thus we can add the square only reiiably at one side
+      local place_square_at_side = 1;
+      if( orientation == 90 or orientation == 270 ) then
+         place_square_at_side = 2;
+      end
+      village_squares[ place_square_at_side ] = villages.plan_village_square( 'cottages', allow_branch );
+
+print('VILLAGE SQUARE TYP: '..minetest.serialize( village_squares ));
+   end
+
    for i = 1,2 do
-      house_rows[ i ] = villages.plan_house_row( start_pos[ i ], orientations[ i ],
+
+      if( village_square ~= nil ) then
+
+         local new_index = {1,2};
+         local start_with          = village_square.house_rows_square[ i ];
+         if( orientation==90 or orientation==270 ) then
+            new_index = {2,1};
+            start_with             = village_square.house_rows_square[ new_index[i] ];
+         end
+         --local distance_road_start = village_square.square_length + 1; --length_row[3] + 1; --village_square.square_width;
+         --local distance_road_start = village_square.length_row[3] + 1; --village_square.square_width;
+         local distance_road_start = village_square.square_width + 1; --village_square.square_width;
+         local start_with_length   = distance_road_start + village_square.width_row[ 3 ]+1;
+
+         if( ((orientation==90 or orientation==270) and
+             ( (i==2 and villages.building_data[ village_square.house_rows_square[ 3 ][ #village_square.house_rows_square[ 3 ] ]].typ == 'road') 
+             or(i==1 and villages.building_data[ village_square.house_rows_square[ 3 ][ 1 ]                                     ].typ == 'road')))
+
+          or ((orientation==0  or orientation==180) and
+             ( (i==1 and villages.building_data[ village_square.house_rows_square[ 3 ][ #village_square.house_rows_square[ 3 ] ]].typ == 'road') 
+             or(i==2 and villages.building_data[ village_square.house_rows_square[ 3 ][ 1 ]                                     ].typ == 'road')))) then
+            distance_road_start = 0;
+         else
+            start_with[ #start_with+1 ] = housenames[ math.random(1,#housenames )];
+         end
+         house_rows[ i ] = villages.plan_house_row( start_pos[ i ], orientations[ i ],
+                                               housenames, {101,0}, {101,0},
+                                               math.floor( max_length * 3.0/4.0), max_row_width, max_houses, inverse_street_dir, allow_branch, 0,
+                                               start_with, distance_road_start, 0, village_squares[i], start_with_length );
+      else
+         house_rows[ i ] = villages.plan_house_row( start_pos[ i ], orientations[ i ],
                                                housenames, interspacing_house_road, interspacing_house_house,
-                                               max_length - math.abs(buildings_offset), max_row_width, max_houses, inverse_street_dir, allow_branch );
+                                               max_length - math.abs(buildings_offset), max_row_width, max_houses, inverse_street_dir, allow_branch, 0, nil,0,0, village_squares[i],0);
+      end
 
       -- handle any new branches that came up
       if( recursion_depth < 1) then 
          for j,v in ipairs( house_rows[ i ] ) do
             if( v.is_branch == 1 ) then
-
+ 
                local branch_buildings_offset =  house_rows[ i ][ 1 ].road_width + 2;
 
                -- the new road shall be no longer than 2/3 that of the old one
@@ -658,12 +865,16 @@ villages.plan_road_with_house_rows = function( start_pos_orig, orientation, hous
 
                local new_road_pos = {x=v.pos.x, y=v.pos.y, z=v.pos.z};
 
-               -- plan the road
+               if( v.village_square ~= nil) then
+                  -- TODO
+                  branch_buildings_offset   = 2;
+               end
+               -- plan the road that branches off to the side
                local branch_road = villages.plan_road_with_house_rows( new_road_pos,
                                                branch_orientation,
                                                housenames, interspacing_house_road, interspacing_house_house,
                                                branch_max_length,
-                                               max_width, max_houses, roadnames, (recursion_depth+1), branch_buildings_offset )
+                                               max_width, max_houses, roadnames, (recursion_depth+1), branch_buildings_offset, v.village_square )
                -- save it
                house_rows[ i ][ j ].branch = branch_road;
             end 
@@ -676,18 +887,17 @@ villages.plan_road_with_house_rows = function( start_pos_orig, orientation, hous
    local road_row   = villages.plan_house_row( start_pos_orig,  orientations[ 1 ],
                                                roadnames, {0}, {0},
 -- TODO: add length to the road to compensate for branch_buildings_offset?
-                                               max_length, road_size.x+1, 100000, inverse_street_dir, nil ); 
+                                               max_length, road_size.x+1, 100000, inverse_street_dir, nil, 0, nil, 0,0, nil, 0 ); 
    
    -- how long is the road? determine the maximum
    local length = math.max( house_rows[ 1 ][ 1 ].road_length, house_rows[ 2 ][ 1 ].road_length );
    length = math.max(       road_row[   1 ].road_length, length );
    
-   return { house_row1   = house_rows[ 1 ],
-            house_row2   = house_rows[ 2 ],
+   return { house_rows   = { house_rows[ 1 ], house_rows[ 2 ], {}, {} },
             road_row     = road_row,
             length       = length,
-            orientation1 = orientation1,
-            orientation2 = orientation2  };
+            orientations = { orientation1, orientation2, nil, nil }
+          };
 end
 
 
@@ -702,6 +912,14 @@ villages.build_house = function( pos, housename, orientation, replacements, new_
 
    local new_filename = villages.mts_path..housename..'.mts';
 
+   -- churches always come with glass - even if the other buildings can't afoord it
+   if( villages.building_data[ housename ].typ == 'church' ) then 
+      for i,v in ipairs( replacements ) do
+         if( v ~= nil and v[1]=='cottages:glass_pane' and v[2]=='default:fence_wood' ) then
+            replacements[ i ] = nil;
+         end
+      end
+   end
 
    -- houses with farming_plus set to 1 grow farming_plus stuff instead of the cotton they come with
    if( villages.building_data[ housename ].farming_plus == 1 ) then
@@ -711,7 +929,7 @@ villages.build_house = function( pos, housename, orientation, replacements, new_
       
       if( not( new_fruit ) or new_fruit == '' ) then
          new_fruit = 'cotton'; -- fallback
-      end
+      end 
       -- cotton may come in up to 8 variants (not that they look much diffrent...)
       for i=1,8 do
          
@@ -720,8 +938,13 @@ villages.build_house = function( pos, housename, orientation, replacements, new_
          -- "surplus" cotton variants will be replaced with the full grown fruit
          if( minetest.registered_nodes[ 'farming_plus:'..new_fruit_name..'_'..i ]) then
             new_fruit_name = new_fruit_name..'_'..i;
+            table.insert( replacements, {"farming:cotton_"..i,  'farming_plus:'..new_fruit_name });
+
+         elseif( minetest.registered_nodes[ 'farming:'..new_fruit_name..'_'..i ]) then
+            new_fruit_name = new_fruit_name..'_'..i;
+            table.insert( replacements, {"farming:cotton_"..i,  'farming:'..new_fruit_name });
+
          end
-         table.insert( replacements, {"farming:cotton_"..i,  'farming_plus:'..new_fruit_name });
       end
    end
 
@@ -806,32 +1029,148 @@ villages.build_road = function( road, replacements )
    for i,v in ipairs( road.road_row ) do
       villages.build_house( v.pos, v.house, v.rot, replacements, v.fruit );
    end
-      
-   -- build the first side / house row of the road
-   for i,v in ipairs( road.house_row1 ) do
 
-      if( v.is_branch ~= 1 or not( v.branch)) then
-         villages.build_house( v.pos, v.house, v.rot, replacements, v.fruit );
+   -- for all houee rows 
+   for j,w in ipairs( road.house_rows ) do
+ 
+      -- build house row nr. j
+      for i,v in ipairs( road.house_rows[ j ] ) do
 
-      -- build branches recursively
-      else
-         villages.build_road( v.branch, replacements );
-      end
-   end
+         if( v.is_branch ~= 1 or not( v.branch)) then
+            villages.build_house( v.pos, v.house, v.rot, replacements, v.fruit );
 
-   -- build the opposite house row
-   for i,v in ipairs( road.house_row2 ) do
-
-      if( v.is_branch ~= 1 or not( v.branch)) then
-         villages.build_house( v.pos, v.house, v.rot, replacements, v.fruit );
-
-      -- build branches recursively
-      else
-         villages.build_road( v.branch, replacements );
+         -- build branches recursively
+         else
+            villages.build_road( v.branch, replacements );
+         end
       end
    end
 end
 
+
+
+villages.plan_village_square = function( typ, road )
+
+   -- all this needs to go into the center
+   local churches = {};
+   local inns     = {};
+   local forges   = {}; -- the forge is debatable; at least we put a well next to it!
+   local wells    = {};
+   local trees    = {};
+   local houses   = {};
+
+   -- which buildings of each type are available?
+   if( typ == 'cottages' ) then
+      -- the churches are all the same - just rotated a bit 
+      churches = {'church_1'}; --,'church_2','church_3','church_4'};
+      inns     = {'taverne_1','taverne_2'}; -- taverne_3 and taverne_4 are too small for the central village place
+      forges   = {'forge_1'};
+      wells    = {'well_1','well_2','well_3','well_4','well_5','well_6','well_7','well_8',};
+      trees    = {'tree_place_1','tree_place_2','tree_place_3','tree_place_4','tree_place_5','tree_place_6','tree_place_7','tree_place_8','tree_place_9','tree_place_10'};
+   end 
+
+   -- select one of each building types
+   local church = churches[ math.random( 1, #churches ) ];
+   local inn    = inns[     math.random( 1, #inns     ) ];
+   local forge  = forges[   math.random( 1, #forges   ) ];
+   local well   = wells[    math.random( 1, #wells    ) ];
+   local tree   = trees[    math.random( 1, #trees    ) ];
+   
+
+   -- arrange the numbers 1-4 in a random pattern
+   local help  = {1,2,3}; -- possible positions in the list...
+   local sort  = {};
+
+   for i = 1, 2 do
+      local nr = math.random( 1, #help );
+      sort[ #sort + 1 ] = help[ nr ];
+      table.remove( help, nr );
+   end
+   -- get the last number
+   sort[ #sort + 1 ] = help[ 1 ];
+
+
+   -- the four house rows around the central village place; the 5th represents the place center
+   local rows = { {}, {}, {}, {}, {}};
+   rows[ sort[ 1 ]] = { church };
+   rows[ sort[ 2 ]] = { inn };
+   -- the well can be left or right of the forge
+   if( math.random(1,2)==1 ) then
+      rows[ sort[ 3 ]] = { forge, well };
+   else
+      rows[ sort[ 3 ]] = { well, forge };
+   end
+   -- the tree is always in the middle
+   rows[ 4 ] = { tree };
+ 
+
+   -- how much space is needed (regarding street length) for each of the rows?
+   local row_min_length = { 0, 0, 0, 0 };
+   row_min_length[ sort[ 1 ]] = villages.building_data[ church ].size.z + 2;
+   row_min_length[ sort[ 2 ]] = villages.building_data[ inn    ].size.z;
+   row_min_length[ sort[ 3 ]] = villages.building_data[ forge  ].size.z + 1  -- space inbetween
+                              + villages.building_data[ well   ].size.z;
+   
+   -- +1 for some distance to the road
+   local row_min_width  = { 0, 0, 0, 0 };
+   row_min_width[  sort[ 1 ]] = villages.building_data[ church ].size.x+1;
+   row_min_width[  sort[ 2 ]] = villages.building_data[ inn    ].size.x+1;
+
+   -- either the forge or the well defines how wide this is
+   if( villages.building_data[ forge ].size.x >
+       villages.building_data[ well  ].size.x ) then
+
+      row_min_width[sort[ 3]] = villages.building_data[ forge  ].size.x+1;
+   else
+      row_min_width[sort[ 3]] = villages.building_data[ well   ].size.x+1;
+   end
+
+   -- there has to be at least enough space for the tree
+   local min_length = villages.building_data[ tree ].size.x + 4;
+   local min_width  = villages.building_data[ tree ].size.z + 4;
+   -- make it quadratic so that rotation is no problem
+   if( min_length < min_width ) then
+      min_length = min_width;
+   else
+      min_width  = min_length;
+   end
+
+   -- row 1 and 2 are opposite of each other
+   if( row_min_length[ 1 ] > min_length ) then
+      min_length = row_min_length[ 1 ];
+   end
+   if( row_min_length[ 2 ] > min_length ) then
+      min_length = row_min_length[ 2 ];
+   end
+  
+
+   -- row 3 and 4 are opposite each other and at a right angel compared towards row1 and row2
+   if( row_min_length[ 3 ] > min_width  ) then
+      min_width  = row_min_length[ 3 ];
+   end
+   local min_total_width  = min_width  + row_min_width[ 1 ] + row_min_width[ 2 ];
+
+   -- we need to add a road that branches off - either at the start or at the end of the 3rd row
+   if( math.random(1,2) == 1 ) then
+      table.insert( rows[3], 1, road ); -- insert at beginning
+   else
+      table.insert( rows[3],    road ); -- append
+   end
+   -- TODO: this may affect min_width/min_length
+
+   return { -- the rows of houses at the square; row 3 is opposite of the main road
+            house_rows_square        = rows,
+            -- how far away do we have to place the houses of house_rows_square[3] from the main road?
+            square_length            = min_length+1,
+            -- in case rows[3] is shorter than the place needed for the tree and some space around:
+            square_width             = min_width,
+            -- how much space do we have do reserve for rows[1]?
+            width_row                = row_min_width,
+            length_row               = row_min_length,
+            -- how much space do we have to leave between road and the house rows of the road that branches off?
+            dist_road_branch         = min_length + row_min_width[ 3 ] +2,
+          };
+end
 
 
 -- tiny farms are much more common than large ones; in this case: 8 times more common
@@ -843,10 +1182,16 @@ villages.houses_cottages    =  {'farm_tiny_1','farm_tiny_2','farm_tiny_3','farm_
                                 'farm_tiny_1','farm_tiny_2','farm_tiny_3','farm_tiny_4','farm_tiny_5','farm_tiny_6','farm_tiny_7',
                                 'farm_tiny_1','farm_tiny_2','farm_tiny_3','farm_tiny_4','farm_tiny_5','farm_tiny_6','farm_tiny_7',
                                 'farm_tiny_1','farm_tiny_2','farm_tiny_3','farm_tiny_4','farm_tiny_5','farm_tiny_6','farm_tiny_7',
+                                'farm_tiny_1','farm_tiny_2','farm_tiny_3','farm_tiny_4','farm_tiny_5','farm_tiny_6','farm_tiny_7',
+                                'farm_tiny_1','farm_tiny_2','farm_tiny_3','farm_tiny_4','farm_tiny_5','farm_tiny_6','farm_tiny_7',
+                                'farm_tiny_1','farm_tiny_2','farm_tiny_3','farm_tiny_4','farm_tiny_5','farm_tiny_6','farm_tiny_7',
+                                'farm_tiny_1','farm_tiny_2','farm_tiny_3','farm_tiny_4','farm_tiny_5','farm_tiny_6','farm_tiny_7',
                                 'hut_1', 'hut_1', 'hut_1',
                                 'farm_full_1','farm_full_2','farm_full_3','farm_full_4','farm_full_5','farm_full_6',
                                 'farm_full_1','farm_full_2','farm_full_3','farm_full_4','farm_full_5','farm_full_6',
-                                'well_1', 'well_2', 'well_3', 'well_4', 'well_5', 'well_6', 'well_7', 'well_8'
+                                'farm_full_1','farm_full_2','farm_full_3','farm_full_4','farm_full_5','farm_full_6',
+                                'well_1', 'well_2', 'well_3', 'well_4', 'well_5', 'well_6', 'well_7', 'well_8',
+                                'taverne_3','taverne_4', -- small taverns
  };
                                 
 villages.houses_taoki       = {
@@ -881,6 +1226,11 @@ minetest.register_chatcommand("road", {
                    return;
                 end
 
+--local square = villages.plan_village_square( 'cottages', 'dirtroad_1');
+--minetest.chat_send_player( name, minetest.serialize( square ));
+--if( 1==1 ) then return; end
+
+
                 local player = minetest.env:get_player_by_name(name);
                 local pos    = player:getpos();
 
@@ -907,16 +1257,22 @@ distances_houses = {101,0};
                     
                 local replacements = {};
                 local houses_road = villages.houses_cottages;
-                if( math.random( 1,4 )==1 and 0) then -- TODO: disabled for now
+                if( math.random( 1,4 )==-1) then -- TODO: disabled for now
                    houses_road  = villages.houses_taoki;
                    replacements = villages.get_replacement_list( 'taoki' ); 
                 else
                    replacements = villages.get_replacement_list( 'cottages' );
                 end
 
+-- TODO 
+--local tmpres = villages.plan_village_square( 'cottages', 'dirtroad_1' );
+--print( minetest.serialize( tmpres ));
+----                villages.build_road( tmpres, replacements );
+--if (1==1) then return; end
 
                 -- plan the road
-                local my_road =  villages.plan_road_with_house_rows( {x=pos.x,y=(pos.y+0.5),z=pos.z}, param, houses_road, distances_road, distances_houses,120,90,30,street_nodes,0,0);
+                local my_road =  villages.plan_road_with_house_rows( {x=pos.x,y=(pos.y+0.5),z=pos.z}, param, houses_road, distances_road, distances_houses,130,90,30,street_nodes,0,0,nil);
+
 
 
                 -- actually build it (place the houses etc.)
