@@ -42,9 +42,6 @@ villages.BRANCH_PROBABILITY  = 40;  -- how probable is it that we'll branch off 
 --      for now, only typ "road" is relevant
 villages.building_data = {
    church_1        = {burried=1, rotated=0,   farming_plus=0, avoid='', typ='church'},    
-   church_2        = {burried=1, rotated=90,  farming_plus=0, avoid='', typ='church'},    
-   church_3        = {burried=1, rotated=180, farming_plus=0, avoid='', typ='church'},    
-   church_4        = {burried=1, rotated=270, farming_plus=0, avoid='', typ='church'},    
    forge_1         = {burried=1, rotated=0, farming_plus=0, avoid='', typ='forge'},
    mill_1          = {burried=1, rotated=0, farming_plus=0, avoid='', typ='mill'},
    hut_1           = {burried=1, rotated=0, farming_plus=0, avoid='', typ='hut'},
@@ -921,6 +918,18 @@ villages.build_house = function( pos, housename, orientation, replacements, new_
       end
    end
 
+
+   -- TODO: the half_door does not rotate as desired yet
+--[[
+   if( orientation==0 or orientation==180) then
+      table.insert( replacements, {'cottages:half_door',          'cottages:half_door_inverted'});
+      table.insert( replacements, {'cottages:half_door_inverted', 'cottages:half_door'});
+   else
+      table.insert( replacements, {'cottages:half_door',          'cottages:half_door'});
+      table.insert( replacements, {'cottages:half_door_inverted', 'cottages:half_door_inverted'});
+   end
+--]]
+
    -- houses with farming_plus set to 1 grow farming_plus stuff instead of the cotton they come with
    if( villages.building_data[ housename ].farming_plus == 1 ) then
       if( replacements == nil ) then
@@ -935,11 +944,16 @@ villages.build_house = function( pos, housename, orientation, replacements, new_
          
          local new_fruit_name = new_fruit;
          -- farming_plus plants sometimes come in 3 or 4 variants, but not in 8 as cotton does
-         -- "surplus" cotton variants will be replaced with the full grown fruit
          if( minetest.registered_nodes[ 'farming_plus:'..new_fruit_name..'_'..i ]) then
             new_fruit_name = new_fruit_name..'_'..i;
             table.insert( replacements, {"farming:cotton_"..i,  'farming_plus:'..new_fruit_name });
 
+         -- "surplus" cotton variants will be replaced with the full grown fruit
+         elseif( minetest.registered_nodes[ 'farming_plus:'..new_fruit_name ]) then
+            new_fruit_name = new_fruit_name;
+            table.insert( replacements, {"farming:cotton_"..i,  'farming_plus:'..new_fruit_name });
+
+         -- and plants from farming: are supported as well
          elseif( minetest.registered_nodes[ 'farming:'..new_fruit_name..'_'..i ]) then
             new_fruit_name = new_fruit_name..'_'..i;
             table.insert( replacements, {"farming:cotton_"..i,  'farming:'..new_fruit_name });
@@ -1284,3 +1298,71 @@ distances_houses = {101,0};
 
 
 
+
+
+
+-- does what the name says - creates a flat terrain for a village
+villages.make_flat = function( originpos, dim )
+
+   -- read voxel manipulator from map
+   local vm       = minetest.get_voxel_manip();
+   local ep1, ep2 = vm:read_from_map({x=originpos.x,y=originpos.y,z=originpos.z}, {x=(originpos.x+dim.x),y=(originpos.y+dim.y),z=(originpos.z+dim.z)});
+   local data     = vm:get_data();
+print( 'Will work from '..minetest.serialize( originpos )..' onward '..minetest.serialize( dim )..' nodes.');
+
+   local a = VoxelArea:new{
+                MinEdge={x=ep1.x, y=ep1.y, z=ep1.z},
+                MaxEdge={x=ep2.x, y=ep2.y, z=ep2.z},
+        }
+
+   for y = 0, dim.y-1 do
+      
+      local layer_node_id = 126; -- air
+      if( y > 9 ) then
+         layer_node_id = minetest.get_content_id( 'default:glass'); --126; -- air 
+      elseif( y==9 ) then
+         layer_node_id = minetest.get_content_id( 'default:dirt_with_grass' );
+      elseif( y==8 ) then
+         layer_node_id = minetest.get_content_id( 'default:dirt' );
+      elseif( y==7 ) then
+         layer_node_id = minetest.get_content_id( 'default:wood' ); -- TODO: water_source
+      elseif( y==6 or y==5 or y==4) then
+         layer_node_id = minetest.get_content_id( 'cottages:loam' ); 
+      else
+         layer_node_id = minetest.get_content_id( 'default:stone' ); 
+      end
+print( 'y='..tostring(y)..' Setting layer to '..tostring(layer_node_id));
+
+      for z = 0, dim.z-1 do
+         for x = 0, dim.x-1 do
+ 
+            local i = a:index(originpos.x+x, originpos.y+y, originpos.z+z);
+            data[ i ] =  layer_node_id;
+         end
+      end
+   end
+           
+   -- write the map data back
+   vm:set_data(data);
+   vm:write_to_map();
+   vm:update_map();
+
+end
+   
+
+minetest.register_chatcommand("flat", {
+        params = "",
+        description = "Make the area flat.",
+        privs = {},
+        func = function(name, param)
+
+
+                local player = minetest.env:get_player_by_name(name);
+                local pos    = player:getpos();
+
+                minetest.chat_send_player(name, "Flattening area at your position: "..minetest.serialize( pos )..".");
+
+                -- a depth of 10 is more than sufficient; the place above needs to be set to air
+                villages.make_flat( {x=pos.x, y=(pos.y-0.5), z=pos.z}, {x=8,y=40,z=6} );
+             end
+});
